@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS matches
     scores1  integer not null,
     scores2  integer not null,
     start    timestamp,
-    team1_id    integer not null,
-    team2_id   integer not null,
+    team1_id    integer,
+    team2_id   integer,
     CONSTRAINT FK_TEAM1_ON_TEAMS FOREIGN KEY (team1_id) REFERENCES teams (team_id),
     CONSTRAINT FK_TEAM2_ON_TEAMS FOREIGN KEY (team2_id) REFERENCES teams (team_id)
 );
@@ -24,7 +24,9 @@ CREATE TABLE IF NOT EXISTS users
 (
     chat_id  bigint not null
         primary key,
-    username varchar(255)
+    username varchar(255),
+    points integer,
+    exact_pred integer
 );
 
 CREATE TABLE IF NOT EXISTS predictions

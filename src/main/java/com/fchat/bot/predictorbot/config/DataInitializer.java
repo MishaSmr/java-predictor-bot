@@ -48,26 +48,31 @@ public class DataInitializer {
         teams.add(wal);
         Team arg = new Team(9, "Аргентина", EmojiParser.parseToUnicode(":ar:"));
         teams.add(arg);
-        Team sar = new Team(10, "Саудовская Аравия", EmojiParser.parseToUnicode(":sa:"));
+        Team sar = new Team(10, "Саудовская Аравия", EmojiParser.parseToUnicode("\uD83C\uDDF8\uD83C\uDDE6"));
         teams.add(sar);
         teamRepository.saveAll(teams);
         log.info("In TeamsRepository saved all teams");
 
         List<Match> matches = new ArrayList<>();
-        ZonedDateTime startTime1 = ZonedDateTime.of(2022, 10, 22, 20, 30, 0, 0, zone);
+        ZonedDateTime startTime1 = ZonedDateTime.of(2022, 10, 26, 22, 30, 0, 0, zone);
         matches.add(new Match(1, qat, ecu, 0, 0, Instant.from(startTime1)));
 
-        ZonedDateTime startTime2 = ZonedDateTime.of(2022, 10, 22, 21, 0, 0, 0, zone);
+        ZonedDateTime startTime2 = ZonedDateTime.of(2022, 10, 26, 23, 0, 0, 0, zone);
         matches.add(new Match(2, eng, ira, 0, 0, Instant.from(startTime2)));
 
-        ZonedDateTime startTime3 = ZonedDateTime.of(2022, 10, 22, 22, 0, 0, 0, zone);
+        ZonedDateTime startTime3 = ZonedDateTime.of(2022, 10, 27, 22, 0, 0, 0, zone);
         matches.add(new Match(3, sen, ned, 0, 0, Instant.from(startTime3)));
 
-        ZonedDateTime startTime4 = ZonedDateTime.of(2022, 10, 22, 23, 0, 0, 0, zone);
+        ZonedDateTime startTime4 = ZonedDateTime.of(2022, 10, 27, 23, 0, 0, 0, zone);
         matches.add(new Match(4, usa, wal, 0, 0, Instant.from(startTime4)));
 
-        ZonedDateTime startTime5 = ZonedDateTime.of(2022, 11, 22, 13, 0, 0, 0, zone);
+        ZonedDateTime startTime5 = ZonedDateTime.of(2022, 10, 28, 23, 45, 0, 0, zone);
         matches.add(new Match(5, arg, sar, 0, 0, Instant.from(startTime5)));
+
+
+
+        ZonedDateTime startTime64 = ZonedDateTime.of(2022, 12, 18, 18, 0, 0, 0, zone);
+        matches.add(new Match(64, null, null, 0, 0, Instant.from(startTime64)));
         matchRepository.saveAll(matches);
         log.info("In MatchesRepository saved all matches");
     }

@@ -2,8 +2,11 @@ package com.fchat.bot.predictorbot.service;
 
 import com.fchat.bot.predictorbot.config.BotConfig;
 import com.fchat.bot.predictorbot.model.*;
+import com.vdurmont.emoji.EmojiParser;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -27,31 +30,39 @@ import java.util.stream.Collectors;
 
 @Component
 @Slf4j
+@Transactional(readOnly = true)
 public class TelegramBot extends TelegramLongPollingBot {
 
     private final UserRepository userRepository;
     private final MatchRepository matchRepository;
     private final PredictionRepository predictionRepository;
+    private final TeamRepository teamRepository;
     private final BotConfig botConfig;
 
-    private HashMap<Long, String> lastMessages; // Здесь хранятся последние сообщения от каждого пользователя
-
+    private HashMap<Long, String> lastMessages;
+    private HashMap<Long, String> lastAdminMessages;
+    ZoneId zone = ZoneId.of("Europe/Moscow");
     DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
+    DateTimeFormatter formatterForPatch = DateTimeFormatter.ofPattern("dd.MM.yyyy.HH.mm");
 
     private final String HELP_TEXT = "Да поможет вам бот:\n\n" +
             "/predict - \n" +
             "/help - \n";
 
     public TelegramBot(BotConfig botConfig, UserRepository userRepository, MatchRepository matchRepository,
-                       PredictionRepository predictionRepository) {
+                       PredictionRepository predictionRepository, TeamRepository teamRepository) {
         this.botConfig = botConfig;
         this.userRepository = userRepository;
         this.matchRepository = matchRepository;
         this.predictionRepository = predictionRepository;
+        this.teamRepository = teamRepository;
         lastMessages = new HashMap<>();
+        lastAdminMessages = new HashMap<>();
         List<BotCommand> commands = new ArrayList<>();
         commands.add(new BotCommand("/start", "start"));
         commands.add(new BotCommand("/predict", "make prediction"));
+        commands.add(new BotCommand("/table", "get top20 players"));
+        commands.add(new BotCommand("/my_predicts", "get your predictions"));
         commands.add(new BotCommand("/help", "get info about bot"));
         try {
             execute(new SetMyCommands(commands, new BotCommandScopeDefault(), null));
@@ -75,6 +86,15 @@ public class TelegramBot extends TelegramLongPollingBot {
         if (update.hasMessage() && update.getMessage().hasText()) {
             String messageText = update.getMessage().getText();
             long chatId = update.getMessage().getChatId();
+            if (lastAdminMessages.containsKey(chatId)) {
+                if (lastAdminMessages.get(chatId).equals("/patchmatch")) {
+                    patchMatch(update.getMessage());
+                    return;
+                } else if (lastAdminMessages.get(chatId).equals("/putscore")) {
+                    putScore(update.getMessage());
+                    return;
+                }
+            }
             if (lastMessages.containsKey(chatId)) {
                 savePredict(Integer.parseInt(lastMessages.get(chatId)), update.getMessage());
                 return;
@@ -92,6 +112,28 @@ public class TelegramBot extends TelegramLongPollingBot {
                     break;
                 case "/predict":
                     handlePredictCommand(chatId);
+                    break;
+                case "/my_predicts":
+                    handleMyPredictsCommand(chatId);
+                    break;
+                case "/table":
+                    handleTableCommand(chatId);
+                    break;
+                case "/admin":
+                    handleAdminCommand(chatId);
+                    break;
+                case "/patchmatch":
+                    if (chatId == botConfig.getAdminOneId() || chatId == botConfig.getAdminTwoId()) {
+                        sendMessage(chatId, "Введите матч в формате:\n id-t1-t2-s1-s2-dd.MM.yyyy.HH.mm \n" +
+                                "Если время не меняется, введите вместо него 0");
+                        lastAdminMessages.put(chatId, "/patchmatch");
+                    }
+                    break;
+                case "/putscore":
+                    if (chatId == botConfig.getAdminOneId() || chatId == botConfig.getAdminTwoId()) {
+                        sendMessage(chatId, "Введите счет матча в формате:\n id-s1-s2");
+                        lastAdminMessages.put(chatId, "/putscore");
+                    }
                     break;
                 default:
                     sendMessage(chatId, "Sorry, command was not recognized");
@@ -117,21 +159,25 @@ public class TelegramBot extends TelegramLongPollingBot {
                 int matchId = Integer.parseInt(callbackData);
                 if (predictionRepository.findByUserAndMatch(chatId, matchId) != null) {
                     sendMessage(chatId, "Прогноз на матч уже был сделан");
+                    lastMessages.remove(chatId);
                     return;
                 }
-                InlineKeyboardButton button = new InlineKeyboardButton();
-                List<InlineKeyboardButton> rowInLine = new ArrayList<>();
-                button.setText("Отмена");
-                button.setCallbackData("CANCEL");
-                rowInLine.add(button);
-                SendMessage message = new SendMessage();
-                message.setChatId(String.valueOf(chatId));
-                message.setText("Выбран матч " +
-                        makeShortTextFromMatch(matchRepository.findById(matchId).get()) +
-                        "\nОтправьте счет матча в формате 'X-X' (например 5-0).\nНажмите кнопку \"Отмена\" если передумали");
-                message.setReplyMarkup(makeInLineKeyboard(rowInLine));
-                executeMessage(message);
-                lastMessages.put(chatId, callbackData);
+                ZonedDateTime nowTime = ZonedDateTime.ofInstant(Instant.now(), zone);
+                if (ZonedDateTime.ofInstant(matchRepository.findById(matchId).get().getStart(), zone).minusMinutes(120).isAfter(nowTime)) {
+                    InlineKeyboardButton button = new InlineKeyboardButton();
+                    List<InlineKeyboardButton> rowInLine = new ArrayList<>();
+                    button.setText("Отмена");
+                    button.setCallbackData("CANCEL");
+                    rowInLine.add(button);
+                    SendMessage message = new SendMessage();
+                    message.setChatId(String.valueOf(chatId));
+                    message.setText("Выбран матч " +
+                            makeShortTextFromMatch(matchRepository.findById(matchId).get()) +
+                            "\nОтправьте счет матча в формате 'X-X' (например 5-0).\nНажмите кнопку \"Отмена\" если передумали");
+                    message.setReplyMarkup(makeInLineKeyboard(rowInLine));
+                    executeMessage(message);
+                    lastMessages.put(chatId, callbackData);
+                }
             }
         }
     }
@@ -143,7 +189,8 @@ public class TelegramBot extends TelegramLongPollingBot {
         executeMessage(message);
     }
 
-    private void registerUser(Message msg) {
+    @Transactional
+    public void registerUser(Message msg) {
         long chatId = msg.getChatId();
         if (userRepository.findById(msg.getChatId()).isEmpty()) {
             Chat chat = msg.getChat();
@@ -163,12 +210,11 @@ public class TelegramBot extends TelegramLongPollingBot {
             sendMessage(chatId, "You are not registered! Use /start command");
             return;
         }
-        ZoneId zone = ZoneId.of("Europe/Moscow");
-        ZonedDateTime startTime = ZonedDateTime.ofInstant(Instant.now(), zone);
+        ZonedDateTime nowTime = ZonedDateTime.ofInstant(Instant.now(), zone);
         List<Match> availableMatches = matchRepository.findAll()
                 .stream()
-                .filter(m -> ZonedDateTime.ofInstant(m.getStart(), zone).getDayOfYear() == startTime.getDayOfYear())
-                .filter(m -> ZonedDateTime.ofInstant(m.getStart(), zone).minusMinutes(120).isAfter(startTime))
+                .filter(m -> ZonedDateTime.ofInstant(m.getStart(), zone).getDayOfYear() == nowTime.getDayOfYear())
+                .filter(m -> ZonedDateTime.ofInstant(m.getStart(), zone).minusMinutes(120).isAfter(nowTime))
                 .sorted(Comparator.comparing(Match::getMatchId))
                 .collect(Collectors.toList());
         if (availableMatches.isEmpty()) {
@@ -177,6 +223,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
         sendMessage(chatId, "На какой матч делаем прогноз?");
         StringBuilder sb = new StringBuilder();
+        sb.append("Матчи на сегодня:\n");
         List<InlineKeyboardButton> rowInLine = new ArrayList<>();
         for (Match m : availableMatches) {
             sb.append(m.getMatchId()).append(" — ")
@@ -194,6 +241,162 @@ public class TelegramBot extends TelegramLongPollingBot {
         executeMessage(message);
     }
 
+    private void handleMyPredictsCommand(long chatId) {
+        List<Prediction> predictions = predictionRepository.findByUser(chatId);
+        if (predictions.isEmpty()) {
+            sendMessage(chatId, "Нет ни одного прогноза");
+            return;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Prediction p : predictions) {
+            sb.append(p.getMatch().getTeam1().getName())
+                    .append(" - ")
+                    .append(p.getMatch().getTeam2().getName())
+                    .append(" ")
+                    .append(p.getScores1())
+                    .append("-")
+                    .append(p.getScores2())
+                    .append("\n");
+        }
+        sendMessage(chatId, sb.toString());
+    }
+
+    private void handleTableCommand(long chatId) {
+        User user = userRepository.findById(chatId).get();
+        List<User> users = userRepository.findAll()
+                .stream()
+                .sorted(Comparator.comparing(User::getPoints).reversed().thenComparing(User::getExactPred).reversed())
+                .collect(Collectors.toList());
+        List<User> topUsers = users
+                .stream()
+                .limit(20)
+                .collect(Collectors.toList());
+        StringBuilder sb = new StringBuilder();
+        int i = 1;
+        for (User u : topUsers) {
+            sb.append(i).append(" ").append(u.getUsername()).append("  ").append(u.getPoints()).append("\n");
+            i++;
+        }
+        sb.append("\n");
+        sb.append("Твои очки - ")
+                .append(user.getPoints())
+                .append(" Место в рейтинге - ")
+                .append(users.indexOf(user) + 1);
+        sendMessage(chatId, sb.toString());
+    }
+
+    private void handleAdminCommand(long chatId) {
+        if (chatId == botConfig.getAdminOneId() || chatId == botConfig.getAdminTwoId()) {
+            String text = "Admin menu \n" +
+                    "Select command: \n" +
+                    "/patchmatch\n" +
+                    "/putscore";
+            sendMessage(chatId, text);
+        }
+
+    }
+
+    @Transactional
+    public void patchMatch(Message msg) {
+        String[] matchData = msg.getText().split("-");
+        try {
+            MatchDto matchDto = new MatchDto(
+                    Integer.parseInt(matchData[0]),
+                    Integer.parseInt(matchData[1]),
+                    Integer.parseInt(matchData[2]),
+                    Integer.parseInt(matchData[3]),
+                    Integer.parseInt(matchData[4]),
+                    matchData[5]
+            );
+            Match match = matchRepository.findById(matchDto.getMatchId()).get();
+            match.setTeam1(teamRepository.findById(matchDto.getTeam1Id()).get());
+            match.setTeam2(teamRepository.findById(matchDto.getTeam2Id()).get());
+            match.setScores1(matchDto.getScores1());
+            match.setScores2(matchDto.getScores2());
+            if (!matchDto.getStartTime().equals("0")) {
+                ZonedDateTime startTime = ZonedDateTime.of((LocalDateTime.parse(matchDto.getStartTime(), formatterForPatch)), zone);
+                match.setStart(Instant.from(startTime));
+            }
+            matchRepository.save(match);
+            sendMessage(msg.getChatId(), "Матч id=" + match.getMatchId() + " изменен.");
+            log.info("Match patched: " + match.getMatchId());
+            lastAdminMessages.remove(msg.getChatId());
+        } catch (NumberFormatException e) {
+            log.error(e.getMessage());
+            sendMessage(msg.getChatId(), "Неверный формат");
+            lastAdminMessages.remove(msg.getChatId());
+        }
+    }
+
+    @Transactional
+    public void putScore(Message msg) {
+        String[] matchData = msg.getText().split("-");
+        try {
+            MatchScoreDto matchScoreDto = new MatchScoreDto(
+                    Integer.parseInt(matchData[0]),
+                    Integer.parseInt(matchData[1]),
+                    Integer.parseInt(matchData[2])
+            );
+            Match match = matchRepository.findById(matchScoreDto.getMatchId()).get();
+            match.setScores1(matchScoreDto.getScores1());
+            match.setScores2(matchScoreDto.getScores2());
+            matchRepository.save(match);
+            sendMessage(msg.getChatId(), "В матч id=" + match.getMatchId() + " внесен счет.");
+            log.info("Match patched: " + match.getMatchId());
+            lastAdminMessages.remove(msg.getChatId());
+            calculatePoints(match, msg.getChatId());
+        } catch (NumberFormatException e) {
+            log.error(e.getMessage());
+            sendMessage(msg.getChatId(), "Неверный формат");
+            lastAdminMessages.remove(msg.getChatId());
+        }
+    }
+
+    @Transactional
+    public void calculatePoints(Match m, Long adminId) {
+        sendMessage(adminId, "Калькулируем");
+    }
+
+    @Scheduled(cron = "0 0 10 * * *", zone = "Europe/Moscow")
+    public void sendTodayMatches() {
+        List<User> users = userRepository.findAll();
+        String text;
+        ZonedDateTime nowTime = ZonedDateTime.ofInstant(Instant.now(), zone);
+        if (nowTime.isAfter(matchRepository.findById(64).get().getStart().atZone(zone))) {
+            text = "Сегодня нет ни одного матча. Чемпионат Мира закончен" +
+                    EmojiParser.parseToUnicode("\uD83D\uDE22");
+        } else {
+            List<Match> todayMatches = matchRepository.findAll()
+                    .stream()
+                    .filter(m -> ZonedDateTime.ofInstant(m.getStart(), zone).getDayOfYear() == nowTime.getDayOfYear())
+                    .sorted(Comparator.comparing(Match::getStart))
+                    .collect(Collectors.toList());
+            if (todayMatches.isEmpty()) {
+                text = "Сегодня нет ни одного матча";
+            } else {
+                StringBuilder sb = new StringBuilder();
+                sb.append(EmojiParser.parseToUnicode("\uD83D\uDCC5"))
+                        .append(" Матчи на сегодня:\n\n");
+                for (Match m : todayMatches) {
+                    sb.append(makeTextFromMatch(m)).append("\n");
+                }
+                sb.append("\nЖдем ваши прогнозы!");
+                text = sb.toString();
+            }
+        }
+        Thread thread = new Thread(() -> {
+            for (User u : users) {
+                sendMessage(u.getChatId(), text);
+                try {
+                    Thread.sleep(1000L);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+        thread.start();
+    }
+
     private String makeTextFromMatch(Match match) {
         ZoneId zone = ZoneId.of("Europe/Moscow");
         return match.getTeam1().getFlag() + " " + match.getTeam1().getName() + " : " +
@@ -205,7 +408,8 @@ public class TelegramBot extends TelegramLongPollingBot {
         return match.getTeam1().getName() + " : " + match.getTeam2().getName();
     }
 
-    private void savePredict(int matchId, Message msg) {
+    @Transactional
+    public void savePredict(int matchId, Message msg) {
         String[] scores = msg.getText().split("-");
         checkInputScores(scores[0], msg.getChatId());
         checkInputScores(scores[1], msg.getChatId());
