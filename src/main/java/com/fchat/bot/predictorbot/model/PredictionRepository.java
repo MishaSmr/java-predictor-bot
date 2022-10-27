@@ -18,5 +18,5 @@ public interface PredictionRepository extends JpaRepository<Prediction, Long> {
 
     @Query("select p from Prediction p" +
             " where p.match.matchId = ?1")
-    Prediction findByMatch(int matchId);
+    List<Prediction> findByMatch(int matchId);
 }

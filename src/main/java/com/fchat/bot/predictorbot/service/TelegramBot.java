@@ -105,7 +105,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             switch (messageText) {
                 case "/start":
                     String name = update.getMessage().getChat().getFirstName();
-                    String text = "Превет, " + name + "!";
+                    String text = "Привет, " + name + "!";
                     sendMessage(chatId, text);
                     registerUser(update.getMessage());
                     log.info("Send start message to User: " + name);
@@ -134,15 +134,10 @@ public class TelegramBot extends TelegramLongPollingBot {
                     break;
                 case "/put_score":
                     if (checkAdmin(chatId)) {
-                        sendMessage(chatId, "Введите счет матча в формате:\n id-s1-s2");
+                        sendMessage(chatId, "Введите счет матча в формате:\n id-s1-s2 \n" +
+                                "Внимательно поверьте, что ничего не перепутано!");
                         lastAdminMessages.put(chatId, "/put_score");
                     }
-                    break;
-                case "/calculate":
-                    if (checkAdmin(chatId)) {
-                        lastAdminMessages.put(chatId, "/message_all");
-                    }
-                    calculatePoints(chatId);
                     break;
                 case "/message_all":
                     if (checkAdmin(chatId)) {
@@ -210,7 +205,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             for (User u : users) {
                 sendMessage(u.getChatId(), msg.getText());
                 try {
-                    Thread.sleep(2500L);
+                    Thread.sleep(1000L);
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
@@ -323,7 +318,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                     "Select command: \n" +
                     "/patch_match\n" +
                     "/put_score\n" +
-                    "/calculate\n" +
                     "/message_all";
             sendMessage(chatId, text);
         }
@@ -375,9 +369,12 @@ public class TelegramBot extends TelegramLongPollingBot {
             match.setScores1(matchScoreDto.getScores1());
             match.setScores2(matchScoreDto.getScores2());
             matchRepository.save(match);
-            sendMessage(msg.getChatId(), "В матч " + makeShortTextFromMatch(match) + " внесен счет " +
-                    matchScoreDto.getScores1() + "-" + matchScoreDto.getScores2());
+            String text = "В матч " + makeShortTextFromMatch(match) + " внесен счет " +
+                    matchScoreDto.getScores1() + "-" + matchScoreDto.getScores2();
+            sendMessage(botConfig.getAdminOneId(), text);
+            sendMessage(botConfig.getAdminTwoId(), text);
             log.info("Match patched: " + match.getMatchId());
+            calculatePoints(match, msg.getChatId());
             lastAdminMessages.remove(msg.getChatId());
         } catch (NumberFormatException e) {
             log.error(e.getMessage());
@@ -387,8 +384,25 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     @Transactional
-    public void calculatePoints(Long adminId) {
-        sendMessage(adminId, "Калькулируем");
+    public void calculatePoints(Match match, Long adminId) {
+        List<Prediction> matchPredictions = predictionRepository.findByMatch(match.getMatchId());
+        for (Prediction p : matchPredictions) {
+            User user = p.getUser();
+            if (p.getScores1() == match.getScores1() && p.getScores2() == match.getScores2()) {
+                user.setPoints(user.getPoints() + 3);
+                user.setExactPred(user.getExactPred() + 1);
+            } else if (p.getScores1() - p.getScores2() == 0 && match.getScores1() - match.getScores2() == 0) {
+                user.setPoints(user.getPoints() + 1);
+            } else if ((p.getScores1() - p.getScores2()) == (match.getScores1() - match.getScores2())) {
+                user.setPoints(user.getPoints() + 2);
+            } else if ((p.getScores1() > p.getScores2() && match.getScores1() > match.getScores2()) ||
+                    (p.getScores1() < p.getScores2() && match.getScores1() < match.getScores2())) {
+                user.setPoints(user.getPoints() + 1);
+            }
+            userRepository.save(user);
+        }
+        sendMessage(adminId, "Очки посчитаны");
+        log.info("Calculating points for match id=: " + match.getMatchId());
     }
 
     @Scheduled(cron = "0 0 10 * * *", zone = "Europe/Moscow")
