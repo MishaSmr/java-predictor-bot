@@ -15,4 +15,8 @@ public interface PredictionRepository extends JpaRepository<Prediction, Long> {
     @Query("select p from Prediction p" +
             " where p.user.chatId = ?1")
     List<Prediction> findByUser(Long chatId);
+
+    @Query("select p from Prediction p" +
+            " where p.match.matchId = ?1")
+    Prediction findByMatch(int matchId);
 }

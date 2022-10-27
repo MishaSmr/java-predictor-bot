@@ -87,11 +87,14 @@ public class TelegramBot extends TelegramLongPollingBot {
             String messageText = update.getMessage().getText();
             long chatId = update.getMessage().getChatId();
             if (lastAdminMessages.containsKey(chatId)) {
-                if (lastAdminMessages.get(chatId).equals("/patchmatch")) {
+                if (lastAdminMessages.get(chatId).equals("/patch_match")) {
                     patchMatch(update.getMessage());
                     return;
-                } else if (lastAdminMessages.get(chatId).equals("/putscore")) {
+                } else if (lastAdminMessages.get(chatId).equals("/put_score")) {
                     putScore(update.getMessage());
+                    return;
+                } else if (lastAdminMessages.get(chatId).equals("/message_all")) {
+                    sendMessageToAllUsers(update.getMessage());
                     return;
                 }
             }
@@ -122,17 +125,28 @@ public class TelegramBot extends TelegramLongPollingBot {
                 case "/admin":
                     handleAdminCommand(chatId);
                     break;
-                case "/patchmatch":
-                    if (chatId == botConfig.getAdminOneId() || chatId == botConfig.getAdminTwoId()) {
+                case "/patch_match":
+                    if (checkAdmin(chatId)) {
                         sendMessage(chatId, "Введите матч в формате:\n id-t1-t2-s1-s2-dd.MM.yyyy.HH.mm \n" +
                                 "Если время не меняется, введите вместо него 0");
-                        lastAdminMessages.put(chatId, "/patchmatch");
+                        lastAdminMessages.put(chatId, "/patch_match");
                     }
                     break;
-                case "/putscore":
-                    if (chatId == botConfig.getAdminOneId() || chatId == botConfig.getAdminTwoId()) {
+                case "/put_score":
+                    if (checkAdmin(chatId)) {
                         sendMessage(chatId, "Введите счет матча в формате:\n id-s1-s2");
-                        lastAdminMessages.put(chatId, "/putscore");
+                        lastAdminMessages.put(chatId, "/put_score");
+                    }
+                    break;
+                case "/calculate":
+                    if (checkAdmin(chatId)) {
+                        lastAdminMessages.put(chatId, "/message_all");
+                    }
+                    calculatePoints(chatId);
+                    break;
+                case "/message_all":
+                    if (checkAdmin(chatId)) {
+                        lastAdminMessages.put(chatId, "/message_all");
                     }
                     break;
                 default:
@@ -182,11 +196,29 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendMessage(long chatId, String textToSend) {
+    private void sendMessage(long chatId, String text) {
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
-        message.setText(textToSend);
+        message.setText(text);
         executeMessage(message);
+    }
+
+    private void sendMessageToAllUsers(Message msg) {
+        lastAdminMessages.remove(msg.getChatId());
+        List<User> users = userRepository.findAll();
+        Thread thread = new Thread(() -> {
+            for (User u : users) {
+                sendMessage(u.getChatId(), msg.getText());
+                try {
+                    Thread.sleep(2500L);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            sendMessage(msg.getChatId(), "Сообщение разослано");
+            log.info("Sending message to all users");
+        });
+        thread.start();
     }
 
     @Transactional
@@ -223,7 +255,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
         sendMessage(chatId, "На какой матч делаем прогноз?");
         StringBuilder sb = new StringBuilder();
-        sb.append("Матчи на сегодня:\n");
+        sb.append("Доступные для прогноза матчи:\n");
         List<InlineKeyboardButton> rowInLine = new ArrayList<>();
         for (Match m : availableMatches) {
             sb.append(m.getMatchId()).append(" — ")
@@ -286,11 +318,13 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void handleAdminCommand(long chatId) {
-        if (chatId == botConfig.getAdminOneId() || chatId == botConfig.getAdminTwoId()) {
+        if (checkAdmin(chatId)) {
             String text = "Admin menu \n" +
                     "Select command: \n" +
-                    "/patchmatch\n" +
-                    "/putscore";
+                    "/patch_match\n" +
+                    "/put_score\n" +
+                    "/calculate\n" +
+                    "/message_all";
             sendMessage(chatId, text);
         }
 
@@ -341,10 +375,10 @@ public class TelegramBot extends TelegramLongPollingBot {
             match.setScores1(matchScoreDto.getScores1());
             match.setScores2(matchScoreDto.getScores2());
             matchRepository.save(match);
-            sendMessage(msg.getChatId(), "В матч id=" + match.getMatchId() + " внесен счет.");
+            sendMessage(msg.getChatId(), "В матч " + makeShortTextFromMatch(match) + " внесен счет " +
+                    matchScoreDto.getScores1() + "-" + matchScoreDto.getScores2());
             log.info("Match patched: " + match.getMatchId());
             lastAdminMessages.remove(msg.getChatId());
-            calculatePoints(match, msg.getChatId());
         } catch (NumberFormatException e) {
             log.error(e.getMessage());
             sendMessage(msg.getChatId(), "Неверный формат");
@@ -353,7 +387,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     @Transactional
-    public void calculatePoints(Match m, Long adminId) {
+    public void calculatePoints(Long adminId) {
         sendMessage(adminId, "Калькулируем");
     }
 
@@ -388,7 +422,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             for (User u : users) {
                 sendMessage(u.getChatId(), text);
                 try {
-                    Thread.sleep(1000L);
+                    Thread.sleep(2500L);
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
@@ -448,6 +482,10 @@ public class TelegramBot extends TelegramLongPollingBot {
         rowsInLine.add(rowInLine);
         markupInLine.setKeyboard(rowsInLine);
         return markupInLine;
+    }
+
+    private boolean checkAdmin(long chatId) {
+        return chatId == botConfig.getAdminOneId() || chatId == botConfig.getAdminTwoId();
     }
 }
 

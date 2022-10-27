@@ -34,7 +34,7 @@ public class DataInitializer {
         teams.add(qat);
         Team ecu = new Team(2, "Эквадор", EmojiParser.parseToUnicode(":ec:"));
         teams.add(ecu);
-        Team eng = new Team(3, "Англия", EmojiParser.parseToUnicode(":gb:"));
+        Team eng = new Team(3, "Англия", EmojiParser.parseToUnicode("\uD83C\uDFF4\uDB40\uDC67\uDB40\uDC62\uDB40\uDC65\uDB40\uDC6E\uDB40\uDC67\uDB40\uDC7F"));
         teams.add(eng);
         Team ira = new Team(4, "Иран", EmojiParser.parseToUnicode(":ir:"));
         teams.add(ira);
@@ -44,7 +44,7 @@ public class DataInitializer {
         teams.add(ned);
         Team usa = new Team(7, "США", EmojiParser.parseToUnicode(":us:"));
         teams.add(usa);
-        Team wal = new Team(8, "Уэльс", EmojiParser.parseToUnicode(":gb:"));
+        Team wal = new Team(8, "Уэльс", EmojiParser.parseToUnicode("\uD83C\uDFF4\uDB40\uDC67\uDB40\uDC62\uDB40\uDC77\uDB40\uDC6C\uDB40\uDC73\uDB40\uDC7F"));
         teams.add(wal);
         Team arg = new Team(9, "Аргентина", EmojiParser.parseToUnicode(":ar:"));
         teams.add(arg);
@@ -54,19 +54,19 @@ public class DataInitializer {
         log.info("In TeamsRepository saved all teams");
 
         List<Match> matches = new ArrayList<>();
-        ZonedDateTime startTime1 = ZonedDateTime.of(2022, 10, 26, 22, 30, 0, 0, zone);
+        ZonedDateTime startTime1 = ZonedDateTime.of(2022, 10, 27, 22, 30, 0, 0, zone);
         matches.add(new Match(1, qat, ecu, 0, 0, Instant.from(startTime1)));
 
-        ZonedDateTime startTime2 = ZonedDateTime.of(2022, 10, 26, 23, 0, 0, 0, zone);
+        ZonedDateTime startTime2 = ZonedDateTime.of(2022, 10, 27, 23, 0, 0, 0, zone);
         matches.add(new Match(2, eng, ira, 0, 0, Instant.from(startTime2)));
 
-        ZonedDateTime startTime3 = ZonedDateTime.of(2022, 10, 27, 22, 0, 0, 0, zone);
+        ZonedDateTime startTime3 = ZonedDateTime.of(2022, 10, 28, 22, 0, 0, 0, zone);
         matches.add(new Match(3, sen, ned, 0, 0, Instant.from(startTime3)));
 
-        ZonedDateTime startTime4 = ZonedDateTime.of(2022, 10, 27, 23, 0, 0, 0, zone);
+        ZonedDateTime startTime4 = ZonedDateTime.of(2022, 10, 27, 23, 45, 0, 0, zone);
         matches.add(new Match(4, usa, wal, 0, 0, Instant.from(startTime4)));
 
-        ZonedDateTime startTime5 = ZonedDateTime.of(2022, 10, 28, 23, 45, 0, 0, zone);
+        ZonedDateTime startTime5 = ZonedDateTime.of(2022, 10, 29, 23, 45, 0, 0, zone);
         matches.add(new Match(5, arg, sar, 0, 0, Instant.from(startTime5)));
 
 
