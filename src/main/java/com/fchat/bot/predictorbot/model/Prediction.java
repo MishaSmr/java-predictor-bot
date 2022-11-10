@@ -23,4 +23,5 @@ public class Prediction {
     private Match match;
     private int scores1;
     private int scores2;
+    private Integer points;
 }

@@ -30,21 +30,21 @@ public class DataInitializer {
     public void saveData() {
         ZoneId zone = ZoneId.of("Europe/Moscow");
         List<Team> teams = new ArrayList<>();
-        Team qat = new Team(1, "тестЛоко", EmojiParser.parseToUnicode(":qa:"));
+        Team qat = new Team(1, "Катар", EmojiParser.parseToUnicode(":qa:"));
         teams.add(qat);
-        Team ecu = new Team(2, "тестЦСКА", EmojiParser.parseToUnicode(":ec:"));
+        Team ecu = new Team(2, "Эквадор", EmojiParser.parseToUnicode(":ec:"));
         teams.add(ecu);
-        Team eng = new Team(3, "тестБрайтон", EmojiParser.parseToUnicode("\uD83C\uDFF4\uDB40\uDC67\uDB40\uDC62\uDB40\uDC65\uDB40\uDC6E\uDB40\uDC67\uDB40\uDC7F"));
+        Team eng = new Team(3, "Англия", EmojiParser.parseToUnicode("\uD83C\uDFF4\uDB40\uDC67\uDB40\uDC62\uDB40\uDC65\uDB40\uDC6E\uDB40\uDC67\uDB40\uDC7F"));
         teams.add(eng);
-        Team ira = new Team(4, "тестЧелси", EmojiParser.parseToUnicode(":ir:"));
+        Team ira = new Team(4, "Иран", EmojiParser.parseToUnicode(":ir:"));
         teams.add(ira);
-        Team sen = new Team(5, "тест Порту", EmojiParser.parseToUnicode(":sn:"));
+        Team sen = new Team(5, "Сенегал", EmojiParser.parseToUnicode(":sn:"));
         teams.add(sen);
-        Team ned = new Team(6, "тестАтлетико", EmojiParser.parseToUnicode(":nl:"));
+        Team ned = new Team(6, "Нидерланды", EmojiParser.parseToUnicode(":nl:"));
         teams.add(ned);
-        Team usa = new Team(7, "тестБайер", EmojiParser.parseToUnicode(":us:"));
+        Team usa = new Team(7, "США", EmojiParser.parseToUnicode(":us:"));
         teams.add(usa);
-        Team wal = new Team(8, "тестБрюгге", EmojiParser.parseToUnicode("\uD83C\uDFF4\uDB40\uDC67\uDB40\uDC62\uDB40\uDC77\uDB40\uDC6C\uDB40\uDC73\uDB40\uDC7F"));
+        Team wal = new Team(8, "Уэльс", EmojiParser.parseToUnicode("\uD83C\uDFF4\uDB40\uDC67\uDB40\uDC62\uDB40\uDC77\uDB40\uDC6C\uDB40\uDC73\uDB40\uDC7F"));
         teams.add(wal);
         Team arg = new Team(9, "тестЛестер", EmojiParser.parseToUnicode(":ar:"));
         teams.add(arg);
@@ -62,16 +62,16 @@ public class DataInitializer {
         log.info("In TeamsRepository saved all teams");
 
         List<Match> matches = new ArrayList<>();
-        ZonedDateTime startTime1 = ZonedDateTime.of(2022, 10, 29, 19, 00, 0, 0, zone);
+        ZonedDateTime startTime1 = ZonedDateTime.of(2022, 11, 10, 23, 00, 0, 0, zone);
         matches.add(new Match(1, qat, ecu, 0, 0, Instant.from(startTime1)));
 
-        ZonedDateTime startTime2 = ZonedDateTime.of(2022, 10, 29, 17, 0, 0, 0, zone);
+        ZonedDateTime startTime2 = ZonedDateTime.of(2022, 11, 10, 23, 0, 0, 0, zone);
         matches.add(new Match(2, eng, ira, 0, 0, Instant.from(startTime2)));
 
-        ZonedDateTime startTime3 = ZonedDateTime.of(2022, 11, 1, 20, 45, 0, 0, zone);
+        ZonedDateTime startTime3 = ZonedDateTime.of(2022, 11, 10, 23, 45, 0, 0, zone);
         matches.add(new Match(3, sen, ned, 0, 0, Instant.from(startTime3)));
 
-        ZonedDateTime startTime4 = ZonedDateTime.of(2022, 11, 1, 20, 45, 0, 0, zone);
+        ZonedDateTime startTime4 = ZonedDateTime.of(2022, 11, 10, 23, 45, 0, 0, zone);
         matches.add(new Match(4, usa, wal, 0, 0, Instant.from(startTime4)));
 
         ZonedDateTime startTime5 = ZonedDateTime.of(2022, 10, 29, 14, 30, 0, 0, zone);
