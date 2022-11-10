@@ -174,8 +174,8 @@ public class TelegramBot extends TelegramLongPollingBot {
                 int matchId = Integer.parseInt(callbackData);
                 if (predictionRepository.findByUserAndMatch(chatId, matchId) != null) {
                     Prediction p = predictionRepository.findByUserAndMatch(chatId, matchId);
-                    String text = "Прогноз уже был сделан:" + p.getScores1() + "-" + p.getScores2() +
-                            "Вы можете изменить его";
+                    String text = "Прогноз уже был сделан: " + p.getScores1() + "-" + p.getScores2() +
+                            "\nВы можете изменить его";
                     sendMessage(chatId, text);
                 }
                 ZonedDateTime nowTime = ZonedDateTime.ofInstant(Instant.now(), zone);
@@ -276,7 +276,9 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void handleMyPredictsCommand(long chatId) {
-        List<Prediction> predictions = predictionRepository.findByUser(chatId);
+        List<Prediction> predictions = predictionRepository.findByUser(chatId).stream()
+                .sorted(Comparator.comparing(Prediction::getId))
+                .collect(Collectors.toList());
         if (predictions.isEmpty()) {
             sendMessage(chatId, "Нет ни одного прогноза");
             return;
@@ -289,18 +291,19 @@ public class TelegramBot extends TelegramLongPollingBot {
                     .append(" ")
                     .append(p.getScores1())
                     .append("-")
-                    .append(p.getScores2())
-                    .append("\n");
+                    .append(p.getScores2());
             if (p.getPoints() != null) {
-                sb.append(" (счет: ")
+                sb.append(" (")
                         .append(p.getMatch().getScores1())
                         .append("-")
                         .append(p.getMatch().getScores2())
-                        .append(" очки: ")
+                        .append(" | ")
                         .append(p.getPoints())
                         .append(")");
             }
+            sb.append("\n");
         }
+        sendMessage(chatId, "В скобках указан счет сыгранного матча и ваши очки за матч");
         sendMessage(chatId, sb.toString());
     }
 
@@ -391,7 +394,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             sendMessage(botConfig.getAdminTwoId(), text);
             log.info("Match patched: " + match.getMatchId());
             lastAdminMessages.put(msg.getChatId(), String.valueOf(match.getMatchId()));
-            sendMessage(msg.getChatId(), "Нажмите /calculate если все верно");
+            sendMessage(msg.getChatId(), "Нажмите /calculate если все верно \n/put_score чтобы ввести счет заново");
         } catch (NumberFormatException e) {
             log.error(e.getMessage());
             sendMessage(msg.getChatId(), "Неверный формат");
@@ -419,6 +422,8 @@ public class TelegramBot extends TelegramLongPollingBot {
                     (p.getScores1() < p.getScores2() && match.getScores1() < match.getScores2())) {
                 user.setPoints(user.getPoints() + 1);
                 p.setPoints(1);
+            } else {
+                p.setPoints(0);
             }
             userRepository.save(user);
             predictionRepository.save(p);
@@ -485,7 +490,8 @@ public class TelegramBot extends TelegramLongPollingBot {
         checkInputScores(scores[0], msg.getChatId());
         checkInputScores(scores[1], msg.getChatId());
         Prediction prediction = new Prediction(
-                null,
+                predictionRepository.findByUserAndMatch(msg.getChatId(), matchId) != null ?
+                        predictionRepository.findByUserAndMatch(msg.getChatId(), matchId).getId() : null,
                 userRepository.getReferenceById(msg.getChatId()),
                 matchRepository.getReferenceById(matchId),
                 Integer.parseInt(scores[0]),

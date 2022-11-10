@@ -37,9 +37,9 @@ CREATE TABLE IF NOT EXISTS predictions
     match_id integer
         constraint fk5gyk6l61eh61hmb9u1mr6hd7v
             references matches,
-    chat_id  bigint,
-    points  integer
+    chat_id  bigint
         constraint fkf2caevm5l6wp5enmg1vr0biq
             references users,
+    points  integer,
     CONSTRAINT UQ_MATCH_USER UNIQUE (match_id, chat_id)
 );
