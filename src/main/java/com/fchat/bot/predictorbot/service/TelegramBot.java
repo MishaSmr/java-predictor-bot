@@ -8,6 +8,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.api.methods.ParseMode;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
@@ -46,8 +47,11 @@ public class TelegramBot extends TelegramLongPollingBot {
     DateTimeFormatter formatterForPatch = DateTimeFormatter.ofPattern("dd.MM.yyyy.HH.mm");
 
     private final String HELP_TEXT = "Да поможет вам бот:\n\n" +
-            "/predict - \n" +
-            "/help - \n";
+            "/register - зарегистрироваться для участия в конкурсе прогнозов\n\n" +
+            "/predict - оставить прогноз на матч\n\n" +
+            "/table - посмотреть топ-20 участников, свои очки и свое место в рейтинге\n\n" +
+            "/my_predicts - посмотреть историю своих прогнозов\n\n" +
+            "Правила конкурса:\n";
 
     public TelegramBot(BotConfig botConfig, UserRepository userRepository, MatchRepository matchRepository,
                        PredictionRepository predictionRepository, TeamRepository teamRepository) {
@@ -60,6 +64,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         lastAdminMessages = new HashMap<>();
         List<BotCommand> commands = new ArrayList<>();
         commands.add(new BotCommand("/start", "start"));
+        commands.add(new BotCommand("/register", "register to participate"));
         commands.add(new BotCommand("/predict", "make prediction"));
         commands.add(new BotCommand("/table", "get top20 players"));
         commands.add(new BotCommand("/my_predicts", "get your predictions"));
@@ -105,13 +110,15 @@ public class TelegramBot extends TelegramLongPollingBot {
             switch (messageText) {
                 case "/start":
                     String name = update.getMessage().getChat().getFirstName();
-                    String text = "Привет, " + name + "!";
+                    String text = "Привет, " + name + "!\n" + "Нажми /register, чтобы начать делать прогнозы";
                     sendMessage(chatId, text);
-                    registerUser(update.getMessage());
                     log.info("Send start message to User: " + name);
                     break;
                 case "/help":
                     sendMessage(chatId, HELP_TEXT);
+                    break;
+                case "/register":
+                    registerUser(update.getMessage());
                     break;
                 case "/predict":
                     handlePredictCommand(chatId);
@@ -198,13 +205,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendMessage(long chatId, String text) {
-        SendMessage message = new SendMessage();
-        message.setChatId(String.valueOf(chatId));
-        message.setText(text);
-        executeMessage(message);
-    }
-
     private void sendMessageToAllUsers(Message msg) {
         lastAdminMessages.remove(msg.getChatId());
         List<User> users = userRepository.findAll();
@@ -226,11 +226,15 @@ public class TelegramBot extends TelegramLongPollingBot {
     @Transactional
     public void registerUser(Message msg) {
         long chatId = msg.getChatId();
-        if (userRepository.findById(msg.getChatId()).isEmpty()) {
+        if (userRepository.findById(chatId).isEmpty()) {
             Chat chat = msg.getChat();
             User user = new User();
             user.setChatId(chatId);
-            user.setUsername(chat.getUserName());
+            if (chat.getUserName() != null) {
+                user.setUsername(chat.getUserName());
+            } else {
+                user.setUsername(chat.getFirstName());
+            }
             userRepository.save(user);
             sendMessage(chatId, "You are registered!");
             log.info("User saved: " + user);
@@ -241,7 +245,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void handlePredictCommand(long chatId) {
         if (userRepository.findById(chatId).isEmpty()) {
-            sendMessage(chatId, "You are not registered! Use /start command");
+            sendMessage(chatId, "You are not registered! Use /register command");
             return;
         }
         ZonedDateTime nowTime = ZonedDateTime.ofInstant(Instant.now(), zone);
@@ -320,7 +324,16 @@ public class TelegramBot extends TelegramLongPollingBot {
         StringBuilder sb = new StringBuilder();
         int i = 1;
         for (User u : topUsers) {
-            sb.append(i).append(" ").append(u.getUsername()).append("  ").append(u.getPoints()).append("\n");
+            sb.append(i).append(" ")
+                    .append(u.getChatId() == chatId ? "<b>" : "")
+                    .append(u.getUsername())
+                    .append(u.getChatId() == chatId ? "</b>" : "")
+                    .append("  ")
+                    .append("<b>" + u.getPoints() + "</b>")
+                    .append("  (")
+                    .append(u.getExactPred())
+                    .append(")")
+                    .append("\n");
             i++;
         }
         sb.append("\n");
@@ -328,6 +341,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 .append(user.getPoints())
                 .append(" Место в рейтинге - ")
                 .append(users.indexOf(user) + 1);
+        sendMessage(chatId, "В скобках указано количество точных прогнозов");
         sendMessage(chatId, sb.toString());
     }
 
@@ -510,6 +524,14 @@ public class TelegramBot extends TelegramLongPollingBot {
         } catch (NumberFormatException e) {
             sendMessage(chatId, "Неверный формат счета");
         }
+    }
+
+    private void sendMessage(long chatId, String text) {
+        SendMessage message = new SendMessage();
+        message.setParseMode(ParseMode.HTML);
+        message.setChatId(String.valueOf(chatId));
+        message.setText(text);
+        executeMessage(message);
     }
 
     private void executeMessage(SendMessage message) {
