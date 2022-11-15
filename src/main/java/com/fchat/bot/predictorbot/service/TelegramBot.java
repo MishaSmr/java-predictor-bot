@@ -38,6 +38,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final MatchRepository matchRepository;
     private final PredictionRepository predictionRepository;
     private final TeamRepository teamRepository;
+    private final GroupUserRepository groupUserRepository;
     private final BotConfig botConfig;
 
     private HashMap<Long, String> lastMessages;
@@ -51,31 +52,33 @@ public class TelegramBot extends TelegramLongPollingBot {
             "/predict - оставить прогноз на матч\n\n" +
             "/table - посмотреть топ-20 участников, свои очки и свое место в рейтинге\n\n" +
             "/my_predicts - посмотреть историю своих прогнозов\n\n" +
+            "/chat_league - добавиться в лигу группового чата и посмотреть таблицу только из его участников\n\n" +
             "Правила конкурса:\n" +
-            " - Точный прогноз — 3 очка\n" +
-            " - Угаданная разница мячей (кроме ничьих) — 2 очка\n" +
-            " - Угадан победитель или ничья (не с точным счетом) — 1 очко\n" +
-            " - В матчах серии плей-офф в расчет берется только основное время" +
-            " - Сделать или изменить сделанный ранее прогноз можно в день матча, но не позднее, чем за час до его начала." +
+            " - Точный прогноз — 5 очков\n" +
+            " - Угадан победитель и разница мячей или угадана ничья с неточным счетом — 3 очка\n" +
+            " - Угадан победитель — 1 очко\n" +
+            " - В матчах серии плей-офф в расчет берется только основное время\n" +
+            " - Сделать или изменить сделанный ранее прогноз можно в день матча, но не позднее, чем за час до его начала\n" +
             " - При подсчете рейтинга при равенстве очков выше ставится тот игрок, у кого больше точных прогнозов";
 
     private final int MINUTES_TO_DEADLINE = 60;
 
     public TelegramBot(BotConfig botConfig, UserRepository userRepository, MatchRepository matchRepository,
-                       PredictionRepository predictionRepository, TeamRepository teamRepository) {
+                       PredictionRepository predictionRepository, TeamRepository teamRepository, GroupUserRepository groupUserRepository) {
         this.botConfig = botConfig;
         this.userRepository = userRepository;
         this.matchRepository = matchRepository;
         this.predictionRepository = predictionRepository;
         this.teamRepository = teamRepository;
+        this.groupUserRepository = groupUserRepository;
         lastMessages = new HashMap<>();
         lastAdminMessages = new HashMap<>();
         List<BotCommand> commands = new ArrayList<>();
-        commands.add(new BotCommand("/start", "start"));
         commands.add(new BotCommand("/register", "register to participate"));
         commands.add(new BotCommand("/predict", "make prediction"));
         commands.add(new BotCommand("/table", "get top20 players"));
         commands.add(new BotCommand("/my_predicts", "get your predictions"));
+        commands.add(new BotCommand("/chat_league", "get table for your group chat"));
         commands.add(new BotCommand("/help", "get info about bot"));
         try {
             execute(new SetMyCommands(commands, new BotCommandScopeDefault(), null));
@@ -118,11 +121,13 @@ public class TelegramBot extends TelegramLongPollingBot {
             switch (messageText) {
                 case "/start":
                     String name = update.getMessage().getChat().getFirstName();
-                    String text = "Привет, " + name + "!\n" + "Нажми /register, чтобы начать делать прогнозы";
+                    String text = "Привет, " + name + "!\n" + "Нажми /register, чтобы начать делать прогнозы\n" +
+                            "Нажми /help, чтобы изучить команды бота и правила игры";
                     sendMessage(chatId, text);
                     log.info("Send start message to User: " + name);
                     break;
                 case "/help":
+                case "/help@WCPredictorBot":
                     sendMessage(chatId, HELP_TEXT);
                     break;
                 case "/register":
@@ -136,6 +141,10 @@ public class TelegramBot extends TelegramLongPollingBot {
                     break;
                 case "/table":
                     handleTableCommand(chatId);
+                    break;
+                case "/chat_league@WCPredictorBot":
+                case "/chat_league":
+                    handleGroupLeague(update.getMessage());
                     break;
                 case "/admin":
                     handleAdminCommand(chatId);
@@ -321,37 +330,11 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void handleTableCommand(long chatId) {
-        User user = userRepository.findById(chatId).orElseThrow();
         List<User> users = userRepository.findAll()
                 .stream()
                 .sorted(Comparator.comparing(User::getPoints).thenComparing(User::getExactPred).reversed())
                 .collect(Collectors.toList());
-        List<User> topUsers = users
-                .stream()
-                .limit(20)
-                .collect(Collectors.toList());
-        StringBuilder sb = new StringBuilder();
-        int i = 1;
-        for (User u : topUsers) {
-            sb.append(i).append(" ")
-                    .append(u.getChatId() == chatId ? "<b>" : "")
-                    .append(u.getUsername())
-                    .append(u.getChatId() == chatId ? "</b>" : "")
-                    .append("  ")
-                    .append("<b>" + u.getPoints() + "</b>")
-                    .append("  (")
-                    .append(u.getExactPred())
-                    .append(")")
-                    .append("\n");
-            i++;
-        }
-        sb.append("\n");
-        sb.append("Твои очки - ")
-                .append(user.getPoints())
-                .append(" Место в рейтинге - ")
-                .append(users.indexOf(user) + 1);
-        sendMessage(chatId, "В скобках указано количество точных прогнозов");
-        sendMessage(chatId, sb.toString());
+        makeTable(users, chatId, chatId);
     }
 
     private void handleAdminCommand(long chatId) {
@@ -432,15 +415,12 @@ public class TelegramBot extends TelegramLongPollingBot {
         for (Prediction p : matchPredictions) {
             User user = p.getUser();
             if (p.getScores1() == match.getScores1() && p.getScores2() == match.getScores2()) {
-                user.setPoints(user.getPoints() + 3);
+                user.setPoints(user.getPoints() + 5);
                 user.setExactPred(user.getExactPred() + 1);
-                p.setPoints(3);
-            } else if (p.getScores1() - p.getScores2() == 0 && match.getScores1() - match.getScores2() == 0) {
-                user.setPoints(user.getPoints() + 1);
-                p.setPoints(1);
+                p.setPoints(5);
             } else if ((p.getScores1() - p.getScores2()) == (match.getScores1() - match.getScores2())) {
-                user.setPoints(user.getPoints() + 2);
-                p.setPoints(2);
+                user.setPoints(user.getPoints() + 3);
+                p.setPoints(3);
             } else if ((p.getScores1() > p.getScores2() && match.getScores1() > match.getScores2()) ||
                     (p.getScores1() < p.getScores2() && match.getScores1() < match.getScores2())) {
                 user.setPoints(user.getPoints() + 1);
@@ -525,6 +505,63 @@ public class TelegramBot extends TelegramLongPollingBot {
         lastMessages.remove(msg.getChatId());
         sendMessage(msg.getChatId(), "Прогноз принят");
         log.info("Predict {} on match {} by user {} saved: ", msg.getText(), matchId, msg.getChatId());
+    }
+
+    @Transactional
+    public void handleGroupLeague(Message message) {
+        Chat chat = message.getChat();
+        if (chat.isGroupChat() || chat.isSuperGroupChat()) {
+            if (userRepository.findById(message.getFrom().getId()).isEmpty()) {
+                sendMessage(chat.getId(), "Сначала зарегестрируйтесь в общей лиге. Перейдите в чат с ботом @WCPredictorBot");
+                return;
+            }
+            User user = userRepository.findById(message.getFrom().getId()).orElseThrow();
+            if (!userRepository.findByGroup(chat.getId()).contains(user)) {
+                groupUserRepository.save(new GroupUser(null, chat.getId(), user));
+                sendMessage(chat.getId(), "Вы добавлены в лигу чата " + chat.getTitle());
+                log.info("User add to group {}", chat.getTitle());
+            }
+            List<User> users = userRepository.findByGroup(chat.getId())
+                    .stream()
+                    .sorted(Comparator.comparing(User::getPoints).thenComparing(User::getExactPred).reversed())
+                    .collect(Collectors.toList());
+            makeTable(users, message.getFrom().getId(), chat.getId());
+        } else {
+            sendMessage(chat.getId(), "Доступно только для групп");
+        }
+    }
+
+    private void makeTable(List<User> users, Long userId, Long chatId) {
+        StringBuilder sb = new StringBuilder();
+        int i = 1;
+        System.out.println(userId);
+        for (User u : users) {
+            System.out.println(u.getChatId());
+            sb.append(i).append(" ")
+                    .append(u.getChatId().equals(userId) ? "<b>" : "")
+                    .append(u.getUsername())
+                    .append(u.getChatId().equals(userId) ? "</b>" : "")
+                    .append("  ")
+                    .append("<b>" + u.getPoints() + "</b>")
+                    .append("  (")
+                    .append(u.getExactPred())
+                    .append(")")
+                    .append("\n");
+            if (i == 20) {
+                break;
+            }
+            i++;
+        }
+        if (userRepository.findById(userId).isPresent()) {
+            User user = userRepository.findById(userId).orElseThrow();
+            sb.append("\n");
+            sb.append("Твои очки - ")
+                    .append(user.getPoints())
+                    .append(" Место в рейтинге - ")
+                    .append(users.indexOf(user) + 1);
+        }
+        sendMessage(chatId, "В скобках указано количество точных прогнозов");
+        sendMessage(chatId, sb.toString());
     }
 
     private void checkInputScores(String str, Long chatId) {
