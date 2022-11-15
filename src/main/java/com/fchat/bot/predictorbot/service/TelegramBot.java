@@ -51,7 +51,15 @@ public class TelegramBot extends TelegramLongPollingBot {
             "/predict - оставить прогноз на матч\n\n" +
             "/table - посмотреть топ-20 участников, свои очки и свое место в рейтинге\n\n" +
             "/my_predicts - посмотреть историю своих прогнозов\n\n" +
-            "Правила конкурса:\n";
+            "Правила конкурса:\n" +
+            " - Точный прогноз — 3 очка\n" +
+            " - Угаданная разница мячей (кроме ничьих) — 2 очка\n" +
+            " - Угадан победитель или ничья (не с точным счетом) — 1 очко\n" +
+            " - В матчах серии плей-офф в расчет берется только основное время" +
+            " - Сделать или изменить сделанный ранее прогноз можно в день матча, но не позднее, чем за час до его начала." +
+            " - При подсчете рейтинга при равенстве очков выше ставится тот игрок, у кого больше точных прогнозов";
+
+    private final int MINUTES_TO_DEADLINE = 60;
 
     public TelegramBot(BotConfig botConfig, UserRepository userRepository, MatchRepository matchRepository,
                        PredictionRepository predictionRepository, TeamRepository teamRepository) {
@@ -186,7 +194,8 @@ public class TelegramBot extends TelegramLongPollingBot {
                     sendMessage(chatId, text);
                 }
                 ZonedDateTime nowTime = ZonedDateTime.ofInstant(Instant.now(), zone);
-                if (ZonedDateTime.ofInstant(matchRepository.findById(matchId).orElseThrow().getStart(), zone).minusMinutes(60).isAfter(nowTime)) {
+                if (ZonedDateTime.ofInstant(matchRepository.findById(matchId).orElseThrow().getStart(), zone)
+                        .minusMinutes(MINUTES_TO_DEADLINE).isAfter(nowTime)) {
                     InlineKeyboardButton button = new InlineKeyboardButton();
                     List<InlineKeyboardButton> rowInLine = new ArrayList<>();
                     button.setText("Отмена");
@@ -252,7 +261,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         List<Match> availableMatches = matchRepository.findAll()
                 .stream()
                 .filter(m -> ZonedDateTime.ofInstant(m.getStart(), zone).getDayOfYear() == nowTime.getDayOfYear())
-                .filter(m -> ZonedDateTime.ofInstant(m.getStart(), zone).minusMinutes(60).isAfter(nowTime))
+                .filter(m -> ZonedDateTime.ofInstant(m.getStart(), zone).minusMinutes(MINUTES_TO_DEADLINE).isAfter(nowTime))
                 .sorted(Comparator.comparing(Match::getMatchId))
                 .collect(Collectors.toList());
         if (availableMatches.isEmpty()) {
@@ -470,7 +479,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 for (Match m : todayMatches) {
                     sb.append(makeTextFromMatch(m)).append("\n");
                 }
-                sb.append("\nЖдем ваши прогнозы!");
+                sb.append("\nЖдем ваши прогнозы! —> /predict");
                 text = sb.toString();
             }
         }
