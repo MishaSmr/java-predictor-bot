@@ -52,7 +52,8 @@ public class TelegramBot extends TelegramLongPollingBot {
             "/predict - оставить прогноз на матч\n\n" +
             "/table - посмотреть топ-20 участников, свои очки и свое место в рейтинге\n\n" +
             "/my_predicts - посмотреть историю своих прогнозов\n\n" +
-            "/chat_league - добавиться в лигу группового чата и посмотреть таблицу только из его участников\n\n" +
+            "/chat_league - добавиться в лигу группового чата и посмотреть таблицу только из его участников " +
+            "(доступно только в групповых чатах)\n\n" +
             "Правила конкурса:\n" +
             " - Точный прогноз — 5 очков\n" +
             " - Угадан победитель и разница мячей или угадана ничья с неточным счетом — 3 очка\n" +
@@ -61,7 +62,9 @@ public class TelegramBot extends TelegramLongPollingBot {
             " - Сделать или изменить сделанный ранее прогноз можно в день матча, но не позднее, чем за час до его начала\n" +
             " - При подсчете рейтинга при равенстве очков выше ставится тот игрок, у кого больше точных прогнозов";
 
+    private final String ERROR_IN_GROUP_MESSAGE = "Доступно только в личном  чате с ботом";
     private final int MINUTES_TO_DEADLINE = 60;
+    private final long BOT_ID = 5595895148L;
 
     public TelegramBot(BotConfig botConfig, UserRepository userRepository, MatchRepository matchRepository,
                        PredictionRepository predictionRepository, TeamRepository teamRepository, GroupUserRepository groupUserRepository) {
@@ -100,7 +103,6 @@ public class TelegramBot extends TelegramLongPollingBot {
     @Override
     public void onUpdateReceived(Update update) {
         if (update.hasMessage() && update.getMessage().hasText()) {
-            String messageText = update.getMessage().getText();
             long chatId = update.getMessage().getChatId();
             if (lastAdminMessages.containsKey(chatId)) {
                 if (lastAdminMessages.get(chatId).equals("/patch_match")) {
@@ -118,6 +120,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 savePredict(Integer.parseInt(lastMessages.get(chatId)), update.getMessage());
                 return;
             }
+            String messageText = update.getMessage().getText();
             switch (messageText) {
                 case "/start":
                     String name = update.getMessage().getChat().getFirstName();
@@ -131,15 +134,19 @@ public class TelegramBot extends TelegramLongPollingBot {
                     sendMessage(chatId, HELP_TEXT);
                     break;
                 case "/register":
+                case "/register@WCPredictorBot":
                     registerUser(update.getMessage());
                     break;
                 case "/predict":
-                    handlePredictCommand(chatId);
+                case "/predict@WCPredictorBot":
+                    handlePredictCommand(update.getMessage());
                     break;
                 case "/my_predicts":
-                    handleMyPredictsCommand(chatId);
+                case "/my_predicts@WCPredictorBot":
+                    handleMyPredictsCommand(update.getMessage());
                     break;
                 case "/table":
+                case "/table@WCPredictorBot":
                     handleTableCommand(chatId);
                     break;
                 case "/chat_league@WCPredictorBot":
@@ -220,6 +227,11 @@ public class TelegramBot extends TelegramLongPollingBot {
                     lastMessages.put(chatId, callbackData);
                 }
             }
+        } else if (update.hasMessage() && !update.getMessage().getNewChatMembers().isEmpty()) {
+            if (update.getMessage().getNewChatMembers().get(0).getId() == BOT_ID) {
+                long chatId = update.getMessage().getChatId();
+                sendMessageToGroupAfterAdded(chatId);
+            }
         }
     }
 
@@ -242,10 +254,14 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     @Transactional
-    public void registerUser(Message msg) {
-        long chatId = msg.getChatId();
+    public void registerUser(Message message) {
+        Chat chat = message.getChat();
+        if (chat.isGroupChat() || chat.isSuperGroupChat()) {
+            sendMessage(chat.getId(), ERROR_IN_GROUP_MESSAGE);
+            return;
+        }
+        long chatId = message.getChatId();
         if (userRepository.findById(chatId).isEmpty()) {
-            Chat chat = msg.getChat();
             User user = new User();
             user.setChatId(chatId);
             if (chat.getUserName() != null) {
@@ -261,7 +277,12 @@ public class TelegramBot extends TelegramLongPollingBot {
         sendMessage(chatId, "You are already registered. Let's start thinking about predicts");
     }
 
-    private void handlePredictCommand(long chatId) {
+    private void handlePredictCommand(Message message) {
+        if (message.getChat().isGroupChat() || message.getChat().isSuperGroupChat()) {
+            sendMessage(message.getChatId(), ERROR_IN_GROUP_MESSAGE);
+            return;
+        }
+        long chatId = message.getChatId();
         if (userRepository.findById(chatId).isEmpty()) {
             sendMessage(chatId, "You are not registered! Use /register command");
             return;
@@ -290,14 +311,19 @@ public class TelegramBot extends TelegramLongPollingBot {
             button.setCallbackData(String.valueOf(m.getMatchId()));
             rowInLine.add(button);
         }
-        SendMessage message = new SendMessage();
-        message.setChatId(String.valueOf(chatId));
-        message.setText(sb.toString());
-        message.setReplyMarkup(makeInLineKeyboard(rowInLine));
-        executeMessage(message);
+        SendMessage sendMessage = new SendMessage();
+        sendMessage.setChatId(String.valueOf(chatId));
+        sendMessage.setText(sb.toString());
+        sendMessage.setReplyMarkup(makeInLineKeyboard(rowInLine));
+        executeMessage(sendMessage);
     }
 
-    private void handleMyPredictsCommand(long chatId) {
+    private void handleMyPredictsCommand(Message message) {
+        if (message.getChat().isGroupChat() || message.getChat().isSuperGroupChat()) {
+            sendMessage(message.getChatId(), ERROR_IN_GROUP_MESSAGE);
+            return;
+        }
+        long chatId = message.getChatId();
         List<Prediction> predictions = predictionRepository.findByUser(chatId).stream()
                 .sorted(Comparator.comparing(Prediction::getId))
                 .collect(Collectors.toList());
@@ -350,8 +376,8 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     @Transactional
-    public void patchMatch(Message msg) {
-        String[] matchData = msg.getText().split("-");
+    public void patchMatch(Message message) {
+        String[] matchData = message.getText().split("-");
         try {
             MatchDto matchDto = new MatchDto(
                     Integer.parseInt(matchData[0]),
@@ -371,19 +397,19 @@ public class TelegramBot extends TelegramLongPollingBot {
                 match.setStart(Instant.from(startTime));
             }
             matchRepository.save(match);
-            sendMessage(msg.getChatId(), "Матч id=" + match.getMatchId() + " изменен.");
+            sendMessage(message.getChatId(), "Матч id=" + match.getMatchId() + " изменен.");
             log.info("Match patched: " + match.getMatchId());
-            lastAdminMessages.remove(msg.getChatId());
+            lastAdminMessages.remove(message.getChatId());
         } catch (NumberFormatException e) {
             log.error(e.getMessage());
-            sendMessage(msg.getChatId(), "Неверный формат");
-            lastAdminMessages.remove(msg.getChatId());
+            sendMessage(message.getChatId(), "Неверный формат");
+            lastAdminMessages.remove(message.getChatId());
         }
     }
 
     @Transactional
-    public void putScore(Message msg) {
-        String[] matchData = msg.getText().split("-");
+    public void putScore(Message message) {
+        String[] matchData = message.getText().split("-");
         try {
             MatchScoreDto matchScoreDto = new MatchScoreDto(
                     Integer.parseInt(matchData[0]),
@@ -399,12 +425,12 @@ public class TelegramBot extends TelegramLongPollingBot {
             sendMessage(botConfig.getAdminOneId(), text);
             sendMessage(botConfig.getAdminTwoId(), text);
             log.info("Match patched: " + match.getMatchId());
-            lastAdminMessages.put(msg.getChatId(), String.valueOf(match.getMatchId()));
-            sendMessage(msg.getChatId(), "Нажмите /calculate если все верно \n/put_score чтобы ввести счет заново");
+            lastAdminMessages.put(message.getChatId(), String.valueOf(match.getMatchId()));
+            sendMessage(message.getChatId(), "Нажмите /calculate если все верно \n/put_score чтобы ввести счет заново");
         } catch (NumberFormatException e) {
             log.error(e.getMessage());
-            sendMessage(msg.getChatId(), "Неверный формат");
-            lastAdminMessages.remove(msg.getChatId());
+            sendMessage(message.getChatId(), "Неверный формат");
+            lastAdminMessages.remove(message.getChatId());
         }
     }
 
@@ -488,23 +514,23 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     @Transactional
-    public void savePredict(int matchId, Message msg) {
-        String[] scores = msg.getText().split("-");
-        checkInputScores(scores[0], msg.getChatId());
-        checkInputScores(scores[1], msg.getChatId());
+    public void savePredict(int matchId, Message message) {
+        String[] scores = message.getText().split("-");
+        checkInputScores(scores[0], message.getChatId());
+        checkInputScores(scores[1], message.getChatId());
         Prediction prediction = new Prediction(
-                predictionRepository.findByUserAndMatch(msg.getChatId(), matchId) != null ?
-                        predictionRepository.findByUserAndMatch(msg.getChatId(), matchId).getId() : null,
-                userRepository.getReferenceById(msg.getChatId()),
+                predictionRepository.findByUserAndMatch(message.getChatId(), matchId) != null ?
+                        predictionRepository.findByUserAndMatch(message.getChatId(), matchId).getId() : null,
+                userRepository.getReferenceById(message.getChatId()),
                 matchRepository.getReferenceById(matchId),
                 Integer.parseInt(scores[0]),
                 Integer.parseInt(scores[1]),
                 null
         );
         predictionRepository.save(prediction);
-        lastMessages.remove(msg.getChatId());
-        sendMessage(msg.getChatId(), "Прогноз принят");
-        log.info("Predict {} on match {} by user {} saved: ", msg.getText(), matchId, msg.getChatId());
+        lastMessages.remove(message.getChatId());
+        sendMessage(message.getChatId(), "Прогноз принят");
+        log.info("Predict {} on match {} by user {} saved: ", message.getText(), matchId, message.getChatId());
     }
 
     @Transactional
@@ -518,7 +544,9 @@ public class TelegramBot extends TelegramLongPollingBot {
             User user = userRepository.findById(message.getFrom().getId()).orElseThrow();
             if (!userRepository.findByGroup(chat.getId()).contains(user)) {
                 groupUserRepository.save(new GroupUser(null, chat.getId(), user));
-                sendMessage(chat.getId(), "Вы добавлены в лигу чата " + chat.getTitle());
+                String text = user.getUsername() + ", вы добавлены в лигу чата <b>" + chat.getTitle() + "</b>\n" +
+                        "Возможно, это лучшая лига мира!" + EmojiParser.parseToUnicode("\uD83D\uDE09");
+                sendMessage(chat.getId(), text);
                 log.info("User add to group {}", chat.getTitle());
             }
             List<User> users = userRepository.findByGroup(chat.getId())
@@ -534,9 +562,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private void makeTable(List<User> users, Long userId, Long chatId) {
         StringBuilder sb = new StringBuilder();
         int i = 1;
-        System.out.println(userId);
         for (User u : users) {
-            System.out.println(u.getChatId());
             sb.append(i).append(" ")
                     .append(u.getChatId().equals(userId) ? "<b>" : "")
                     .append(u.getUsername())
@@ -598,6 +624,13 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private boolean checkAdmin(long chatId) {
         return chatId == botConfig.getAdminOneId() || chatId == botConfig.getAdminTwoId();
+    }
+
+    private void sendMessageToGroupAfterAdded(Long chatId) {
+        // System.out.println(message.getNewChatMembers().get(0).getId());
+        String text = "Нажимайте /chat_league, чтобы добавиться в лигу вашего чата" +
+                " и смотреть таблицу только из его участников";
+        sendMessage(chatId, text);
     }
 }
 
