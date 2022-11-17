@@ -529,8 +529,22 @@ public class TelegramBot extends TelegramLongPollingBot {
         );
         predictionRepository.save(prediction);
         lastMessages.remove(message.getChatId());
+        sendJoke(message.getChatId(), message.getText());
         sendMessage(message.getChatId(), "Прогноз принят");
         log.info("Predict {} on match {} by user {} saved: ", message.getText(), matchId, message.getChatId());
+    }
+
+    private void sendJoke(long chatId, String score) {
+        String[] scores = score.split("-");
+        if (score.equals("0-0")) {
+            sendMessage(chatId, "В пустынях Катара и без голевой засухи сухо...");
+        } else if (Integer.parseInt(scores[0] + Integer.parseInt(scores[1])) > 5) {
+            sendMessage(chatId, "По прогнозу в течение дня в пустыне ожидается голевой дождь");
+        } else if (Integer.parseInt(scores[0]) - Integer.parseInt(scores[1]) >= 3
+                || Integer.parseInt(scores[1]) - Integer.parseInt(scores[0]) >= 3) {
+            int difference = Math.abs(Integer.parseInt(scores[0]) - Integer.parseInt(scores[1]));
+            sendMessage(chatId, "Где-то в Самаре сейчас, может и +" + difference + ", но в Катаре около +25");
+        }
     }
 
     @Transactional
@@ -627,7 +641,6 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void sendMessageToGroupAfterAdded(Long chatId) {
-        // System.out.println(message.getNewChatMembers().get(0).getId());
         String text = "Нажимайте /chat_league, чтобы добавиться в лигу вашего чата" +
                 " и смотреть таблицу только из его участников";
         sendMessage(chatId, text);
