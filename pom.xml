@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.fchat.bot</groupId>
 	<artifactId>PredictorBot</artifactId>
-	<version>0.2.0</version>
+	<version>1.0.0</version>
 	<name>PredictorBot</name>
 	<description>Telegram Bot project</description>
 	<properties>
