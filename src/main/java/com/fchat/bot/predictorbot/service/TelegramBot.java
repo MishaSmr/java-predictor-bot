@@ -182,6 +182,9 @@ public class TelegramBot extends TelegramLongPollingBot {
                     }
                     break;
                 default:
+                    if (update.getMessage().getChat().isGroupChat() || update.getMessage().getChat().isSuperGroupChat()) {
+                        return;
+                    }
                     sendMessage(chatId, "Sorry, command was not recognized");
             }
         } else if (update.hasCallbackQuery()) {
