@@ -538,12 +538,12 @@ public class TelegramBot extends TelegramLongPollingBot {
         String[] scores = score.split("-");
         if (score.equals("0-0")) {
             sendMessage(chatId, "В пустынях Катара и без голевой засухи сухо...");
-        } else if (Integer.parseInt(scores[0] + Integer.parseInt(scores[1])) > 5) {
+        } else if ((Integer.parseInt(scores[0]) + Integer.parseInt(scores[1])) > 5) {
             sendMessage(chatId, "По прогнозу в течение дня в пустыне ожидается голевой дождь");
         } else if (Integer.parseInt(scores[0]) - Integer.parseInt(scores[1]) >= 3
                 || Integer.parseInt(scores[1]) - Integer.parseInt(scores[0]) >= 3) {
             int difference = Math.abs(Integer.parseInt(scores[0]) - Integer.parseInt(scores[1]));
-            sendMessage(chatId, "Где-то в Самаре сейчас, может и +" + difference + ", но в Катаре около +25");
+            sendMessage(chatId, "Где-то в Самаре сейчас, может и +" + difference + ", но в Катаре около +30");
         }
     }
 
