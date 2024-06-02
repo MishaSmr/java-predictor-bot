@@ -465,7 +465,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         log.info("Calculating points for match id=: " + match.getMatchId());
     }
 
-    @Scheduled(cron = "0 0 10 * * *", zone = "Europe/Moscow")
+    /*@Scheduled(cron = "0 0 10 * * *", zone = "Europe/Moscow")
     public void sendTodayMatches() {
         List<User> users = userRepository.findAll();
         String text;
@@ -504,7 +504,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         });
         thread.start();
     }
-
+*/
     private String makeTextFromMatch(Match match) {
         ZoneId zone = ZoneId.of("Europe/Moscow");
         return match.getTeam1().getFlag() + " " + match.getTeam1().getName() + " : " +
@@ -605,6 +605,19 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
         sendMessage(chatId, "В скобках указано количество точных прогнозов");
         sendMessage(chatId, sb.toString());
+        /////
+        List<Team> teams = teamRepository.findAll();
+        StringBuilder sb1 = new StringBuilder();
+        for (Team t : teams) {
+            sb1.append(t.getTeamId())
+                    .append("  ")
+                    .append(t.getName())
+                    .append("  ")
+                    .append(t.getFlag())
+                    .append("\n");
+        }
+        sendMessage(chatId, sb1.toString());
+        ///
     }
 
     private void checkInputScores(String str, Long chatId) {

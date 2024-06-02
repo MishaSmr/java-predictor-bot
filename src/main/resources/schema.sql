@@ -51,5 +51,5 @@ CREATE TABLE IF NOT EXISTS group_user
     group_id  bigint not null,
     user_id  bigint not null,
     CONSTRAINT pk_group_user PRIMARY KEY (id),
-    CONSTRAINT FK_USER_ON_GROUP_USER FOREIGN KEY (user_id) REFERENCES users (chat_id)
+    CONSTRAINT FK_USER_ON_GROUP_USER FOREIGN KEY (user_id) REFERENCES users (chat_id) ON DELETE CASCADE
 );
