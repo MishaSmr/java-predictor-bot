@@ -465,13 +465,17 @@ public class TelegramBot extends TelegramLongPollingBot {
         log.info("Calculating points for match id=: " + match.getMatchId());
     }
 
-    /*@Scheduled(cron = "0 0 10 * * *", zone = "Europe/Moscow")
+    @Scheduled(cron = "0 0 10 * * *", zone = "Europe/Moscow")
     public void sendTodayMatches() {
+        ZonedDateTime nowTime = ZonedDateTime.ofInstant(Instant.now(), zone);
+        if (nowTime.isBefore(matchRepository.findById(1).orElseThrow().getStart().atZone(zone).minusHours(24)) ||
+                nowTime.isAfter(matchRepository.findById(64).orElseThrow().getStart().atZone(zone).plusHours(24))) {
+            return;
+        }
         List<User> users = userRepository.findAll();
         String text;
-        ZonedDateTime nowTime = ZonedDateTime.ofInstant(Instant.now(), zone);
         if (nowTime.isAfter(matchRepository.findById(64).orElseThrow().getStart().atZone(zone))) {
-            text = "Сегодня нет ни одного матча. Чемпионат Мира закончен" +
+            text = "Сегодня нет ни одного матча. Евро2024 закончен" +
                     EmojiParser.parseToUnicode("\uD83D\uDE22");
         } else {
             List<Match> todayMatches = matchRepository.findAll()
@@ -492,6 +496,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 text = sb.toString();
             }
         }
+
         Thread thread = new Thread(() -> {
             for (User u : users) {
                 sendMessage(u.getChatId(), text);
@@ -504,7 +509,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         });
         thread.start();
     }
-*/
+
     private String makeTextFromMatch(Match match) {
         ZoneId zone = ZoneId.of("Europe/Moscow");
         return match.getTeam1().getFlag() + " " + match.getTeam1().getName() + " : " +
@@ -539,14 +544,8 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void sendJoke(long chatId, String score) {
         String[] scores = score.split("-");
-        if (score.equals("0-0")) {
-            sendMessage(chatId, "В пустынях Катара и без голевой засухи сухо...");
-        } else if ((Integer.parseInt(scores[0]) + Integer.parseInt(scores[1])) > 5) {
-            sendMessage(chatId, "По прогнозу в течение дня в пустыне ожидается голевой дождь");
-        } else if (Integer.parseInt(scores[0]) - Integer.parseInt(scores[1]) >= 3
-                || Integer.parseInt(scores[1]) - Integer.parseInt(scores[0]) >= 3) {
-            int difference = Math.abs(Integer.parseInt(scores[0]) - Integer.parseInt(scores[1]));
-            sendMessage(chatId, "Где-то в Самаре сейчас, может и +" + difference + ", но в Катаре около +30");
+        if ((Integer.parseInt(scores[0]) + Integer.parseInt(scores[1])) > 5) {
+            sendMessage(chatId, "Тотал 5.5 Больше. Генич одобряет");
         }
     }
 
@@ -605,19 +604,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
         sendMessage(chatId, "В скобках указано количество точных прогнозов");
         sendMessage(chatId, sb.toString());
-        /////
-        List<Team> teams = teamRepository.findAll();
-        StringBuilder sb1 = new StringBuilder();
-        for (Team t : teams) {
-            sb1.append(t.getTeamId())
-                    .append("  ")
-                    .append(t.getName())
-                    .append("  ")
-                    .append(t.getFlag())
-                    .append("\n");
-        }
-        sendMessage(chatId, sb1.toString());
-        ///
     }
 
     private void checkInputScores(String str, Long chatId) {
