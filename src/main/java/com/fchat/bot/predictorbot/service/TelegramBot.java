@@ -55,12 +55,14 @@ public class TelegramBot extends TelegramLongPollingBot {
             "/chat_league - добавиться в лигу группового чата и посмотреть таблицу только из его участников " +
             "(доступно только в групповых чатах)\n\n" +
             "Правила конкурса:\n" +
-            " - Точный прогноз — 5 очков\n" +
-            " - Угадан победитель и разница мячей или угадана ничья с неточным счетом — 3 очка\n" +
-            " - Угадан победитель — 1 очко\n" +
+            " - Точный прогноз — 10 очков\n" +
+            " - Угадан победитель и разница мячей или угадана ничья с неточным счетом — 6 очков\n" +
+            " - Угадан победитель и при этом угадано количество голов одной из команд — 5 очков\n" +
+            " - Угадан победитель и не угаданы голы ни одной из команд — 3 очка\n" +
             " - В матчах серии плей-офф в расчет берется только основное время\n" +
             " - Сделать или изменить сделанный ранее прогноз можно в день матча, но не позднее, чем за час до его начала\n" +
-            " - При подсчете рейтинга при равенстве очков выше ставится тот игрок, у кого больше точных прогнозов";
+            " - При подсчете рейтинга при равенстве очков выше ставится тот игрок, у кого больше точных прогнозов" +
+            "\n\n<i>Играйте в футбол</i>";
 
     private final String ERROR_IN_GROUP_MESSAGE = "Доступно только в личном  чате с ботом";
     private final int MINUTES_TO_DEADLINE = 60;
@@ -77,12 +79,12 @@ public class TelegramBot extends TelegramLongPollingBot {
         lastMessages = new HashMap<>();
         lastAdminMessages = new HashMap<>();
         List<BotCommand> commands = new ArrayList<>();
-        commands.add(new BotCommand("/register", "register to participate"));
-        commands.add(new BotCommand("/predict", "make prediction"));
-        commands.add(new BotCommand("/table", "get top20 players"));
-        commands.add(new BotCommand("/my_predicts", "get your predictions"));
-        commands.add(new BotCommand("/chat_league", "get table for your group chat"));
-        commands.add(new BotCommand("/help", "get info about bot"));
+        commands.add(new BotCommand("/register", "зарегистрироваться"));
+        commands.add(new BotCommand("/predict", "сделать прогноз"));
+        commands.add(new BotCommand("/table", "ТОП20 участников"));
+        commands.add(new BotCommand("/my_predicts", "смотреть свои прогнозы"));
+        commands.add(new BotCommand("/chat_league", "лига чата"));
+        commands.add(new BotCommand("/help", "информация"));
         try {
             execute(new SetMyCommands(commands, new BotCommandScopeDefault(), null));
         } catch (TelegramApiException e) {
@@ -185,7 +187,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     if (update.getMessage().getChat().isGroupChat() || update.getMessage().getChat().isSuperGroupChat()) {
                         return;
                     }
-                    sendMessage(chatId, "Sorry, command was not recognized");
+                    sendMessage(chatId, "Извините, такой команды нет");
             }
         } else if (update.hasCallbackQuery()) {
             String callbackData = update.getCallbackQuery().getData();
@@ -213,8 +215,9 @@ public class TelegramBot extends TelegramLongPollingBot {
                     sendMessage(chatId, text);
                 }
                 ZonedDateTime nowTime = ZonedDateTime.ofInstant(Instant.now(), zone);
-                if (ZonedDateTime.ofInstant(matchRepository.findById(matchId).orElseThrow().getStart(), zone)
-                        .minusMinutes(MINUTES_TO_DEADLINE).isAfter(nowTime)) {
+                ZonedDateTime matchTime = ZonedDateTime.ofInstant(matchRepository.findById(matchId).orElseThrow().getStart(), zone);
+                if (matchTime.minusMinutes(MINUTES_TO_DEADLINE).isAfter(nowTime) && matchTime.getDayOfYear() ==
+                        nowTime.getDayOfYear()) {
                     InlineKeyboardButton button = new InlineKeyboardButton();
                     List<InlineKeyboardButton> rowInLine = new ArrayList<>();
                     button.setText("Отмена");
@@ -273,11 +276,11 @@ public class TelegramBot extends TelegramLongPollingBot {
                 user.setUsername(chat.getFirstName());
             }
             userRepository.save(user);
-            sendMessage(chatId, "You are registered!");
+            sendMessage(chatId, "Вы зарегистрированы!");
             log.info("User saved: " + user);
             return;
         }
-        sendMessage(chatId, "You are already registered. Let's start thinking about predicts");
+        sendMessage(chatId, "Вы уже зарегистрированы. Давайте подумаем о прогнозах");
     }
 
     private void handlePredictCommand(Message message) {
@@ -287,7 +290,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
         long chatId = message.getChatId();
         if (userRepository.findById(chatId).isEmpty()) {
-            sendMessage(chatId, "You are not registered! Use /register command");
+            sendMessage(chatId, "Вы не зарегистрированы! Нажмите /register");
             return;
         }
         ZonedDateTime nowTime = ZonedDateTime.ofInstant(Instant.now(), zone);
@@ -328,7 +331,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
         long chatId = message.getChatId();
         List<Prediction> predictions = predictionRepository.findByUser(chatId).stream()
-                .sorted(Comparator.comparing(Prediction::getId))
+                .sorted(Comparator.comparing(p -> p.getMatch().getMatchId()))
                 .collect(Collectors.toList());
         if (predictions.isEmpty()) {
             sendMessage(chatId, "Нет ни одного прогноза");
@@ -444,16 +447,21 @@ public class TelegramBot extends TelegramLongPollingBot {
         for (Prediction p : matchPredictions) {
             User user = p.getUser();
             if (p.getScores1() == match.getScores1() && p.getScores2() == match.getScores2()) {
-                user.setPoints(user.getPoints() + 5);
+                user.setPoints(user.getPoints() + 10);
                 user.setExactPred(user.getExactPred() + 1);
-                p.setPoints(5);
+                p.setPoints(10);
             } else if ((p.getScores1() - p.getScores2()) == (match.getScores1() - match.getScores2())) {
-                user.setPoints(user.getPoints() + 3);
-                p.setPoints(3);
+                user.setPoints(user.getPoints() + 6);
+                p.setPoints(6);
             } else if ((p.getScores1() > p.getScores2() && match.getScores1() > match.getScores2()) ||
                     (p.getScores1() < p.getScores2() && match.getScores1() < match.getScores2())) {
-                user.setPoints(user.getPoints() + 1);
-                p.setPoints(1);
+                if (p.getScores1() == match.getScores1() || p.getScores2() == match.getScores2()) {
+                    user.setPoints(user.getPoints() + 5);
+                    p.setPoints(5);
+                } else {
+                    user.setPoints(user.getPoints() + 3);
+                    p.setPoints(3);
+                }
             } else {
                 p.setPoints(0);
             }
@@ -538,7 +546,8 @@ public class TelegramBot extends TelegramLongPollingBot {
         predictionRepository.save(prediction);
         lastMessages.remove(message.getChatId());
         sendJoke(message.getChatId(), message.getText());
-        sendMessage(message.getChatId(), "Прогноз принят");
+        sendMessage(message.getChatId(), "Прогноз принят.\n" +
+                "Нажмите /predict если хотите сделать еще или внести изменения");
         log.info("Predict {} on match {} by user {} saved: ", message.getText(), matchId, message.getChatId());
     }
 
