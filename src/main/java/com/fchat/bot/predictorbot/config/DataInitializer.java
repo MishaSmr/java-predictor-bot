@@ -240,7 +240,7 @@ public class DataInitializer {
             matches.add(new Match(50, null, null, 0, 0, Instant.from(startTime50)));
 
             // final
-            ZonedDateTime startTime51 = ZonedDateTime.of(2022, 7, 14, 22, 0, 0, 0, zone);
+            ZonedDateTime startTime51 = ZonedDateTime.of(2024, 7, 14, 22, 0, 0, 0, zone);
             matches.add(new Match(51, null, null, 0, 0, Instant.from(startTime51)));
             matchRepository.saveAll(matches);
             log.info("In MatchesRepository saved all matches");

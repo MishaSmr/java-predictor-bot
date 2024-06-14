@@ -477,12 +477,12 @@ public class TelegramBot extends TelegramLongPollingBot {
     public void sendTodayMatches() {
         ZonedDateTime nowTime = ZonedDateTime.ofInstant(Instant.now(), zone);
         if (nowTime.isBefore(matchRepository.findById(1).orElseThrow().getStart().atZone(zone).minusHours(24)) ||
-                nowTime.isAfter(matchRepository.findById(64).orElseThrow().getStart().atZone(zone).plusHours(24))) {
+                nowTime.isAfter(matchRepository.findById(51).orElseThrow().getStart().atZone(zone).plusHours(24))) {
             return;
         }
         List<User> users = userRepository.findAll();
         String text;
-        if (nowTime.isAfter(matchRepository.findById(64).orElseThrow().getStart().atZone(zone))) {
+        if (nowTime.isAfter(matchRepository.findById(51).orElseThrow().getStart().atZone(zone))) {
             text = "Сегодня нет ни одного матча. Евро2024 закончен" +
                     EmojiParser.parseToUnicode("\uD83D\uDE22");
         } else {
