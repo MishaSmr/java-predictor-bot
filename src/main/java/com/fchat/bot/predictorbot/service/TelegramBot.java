@@ -39,6 +39,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final PredictionRepository predictionRepository;
     private final TeamRepository teamRepository;
     private final GroupUserRepository groupUserRepository;
+    private final ApiService apiService;
     private final BotConfig botConfig;
 
     private HashMap<Long, String> lastMessages;
@@ -69,13 +70,14 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final long BOT_ID = 5595895148L;
 
     public TelegramBot(BotConfig botConfig, UserRepository userRepository, MatchRepository matchRepository,
-                       PredictionRepository predictionRepository, TeamRepository teamRepository, GroupUserRepository groupUserRepository) {
+                       PredictionRepository predictionRepository, TeamRepository teamRepository, GroupUserRepository groupUserRepository, ApiService apiService) {
         this.botConfig = botConfig;
         this.userRepository = userRepository;
         this.matchRepository = matchRepository;
         this.predictionRepository = predictionRepository;
         this.teamRepository = teamRepository;
         this.groupUserRepository = groupUserRepository;
+        this.apiService = apiService;
         lastMessages = new HashMap<>();
         lastAdminMessages = new HashMap<>();
         List<BotCommand> commands = new ArrayList<>();
@@ -518,6 +520,55 @@ public class TelegramBot extends TelegramLongPollingBot {
         thread.start();
     }
 
+    @Scheduled(cron = "0 40 20 * * *", zone = "Europe/Moscow")
+    public void updateTodayMatches() {
+        ZonedDateTime nowTime = ZonedDateTime.ofInstant(Instant.now(), zone);
+        List<Integer> todayMatchesApiIds = matchRepository.findAll()
+                .stream()
+                .filter(m -> ZonedDateTime.ofInstant(m.getStart(), zone).getDayOfYear() == nowTime.getDayOfYear())
+                .map(Match::getApiId)
+                .collect(Collectors.toList());
+        if (!todayMatchesApiIds.isEmpty()) {
+            Thread thread = new Thread(() -> {
+                List<Integer> ignoreIndex = new ArrayList<>();
+                Integer[] score;
+                boolean flag = true;
+                while (flag) {
+                    for (int i = 0; i < todayMatchesApiIds.size(); i++) {
+                        if (ignoreIndex.contains(i)) {
+                            continue;
+                        }
+                        score = apiService.getScore(todayMatchesApiIds.get(i));
+                        if (score != null) {
+                            if (score[0] == 999) {
+                                ignoreIndex.add(i);
+                                continue;
+                            }
+                            apiService.putScore(todayMatchesApiIds.get(i), score);
+                            apiService.calculatePoints(todayMatchesApiIds.get(i));
+                            Match m = matchRepository.findByApiId(todayMatchesApiIds.get(i));
+                            String text = "В матч " + makeShortTextFromMatch(m) +
+                                    " автоматически внесен счет " + m.getScores1() + "-" + m.getScores2();
+                            sendMessage(botConfig.getAdminOneId(), text);
+                            sendMessage(botConfig.getAdminTwoId(), text);
+                            ignoreIndex.add(i);
+                            if (ignoreIndex.size() == todayMatchesApiIds.size()) {
+                                flag = false;
+                            }
+                        }
+                    }
+                    try {
+                        Thread.sleep(60_000L);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException(e);
+                    }
+                }
+            });
+            thread.start();
+        }
+    }
+
     private String makeTextFromMatch(Match match) {
         ZoneId zone = ZoneId.of("Europe/Moscow");
         return match.getTeam1().getFlag() + " " + match.getTeam1().getName() + " : " +
@@ -525,7 +576,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 formatter.format(ZonedDateTime.ofInstant(match.getStart(), zone)) + "(MSK)";
     }
 
-    private String makeShortTextFromMatch(Match match) {
+    public String makeShortTextFromMatch(Match match) {
         return match.getTeam1().getName() + " : " + match.getTeam2().getName();
     }
 
@@ -623,7 +674,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendMessage(long chatId, String text) {
+    public void sendMessage(long chatId, String text) {
         SendMessage message = new SendMessage();
         message.setParseMode(ParseMode.HTML);
         message.setChatId(String.valueOf(chatId));

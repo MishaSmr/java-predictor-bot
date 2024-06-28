@@ -24,4 +24,5 @@ public class Match {
     private int scores1;
     private int scores2;
     private Instant start;
+    private Integer apiId;
 }

@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS matches
     start    timestamp,
     team1_id    integer,
     team2_id   integer,
+    api_id  integer,
     CONSTRAINT pk_matches PRIMARY KEY (match_id),
     CONSTRAINT FK_TEAM1_ON_TEAMS FOREIGN KEY (team1_id) REFERENCES teams (team_id),
     CONSTRAINT FK_TEAM2_ON_TEAMS FOREIGN KEY (team2_id) REFERENCES teams (team_id)
