@@ -2,6 +2,8 @@ package com.fchat.bot.predictorbot.service;
 
 import com.fchat.bot.predictorbot.model.*;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.PropertySource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,11 +21,14 @@ import java.util.List;
 @Service
 @Slf4j
 @Transactional(readOnly = true)
+@PropertySource("application.properties")
 public class ApiService {
 
     private final UserRepository userRepository;
     private final MatchRepository matchRepository;
     private final PredictionRepository predictionRepository;
+    @Value("${api.token}")
+    String token;
 
     public ApiService(UserRepository userRepository, MatchRepository matchRepository, PredictionRepository predictionRepository) {
         this.userRepository = userRepository;
@@ -95,12 +100,12 @@ public class ApiService {
     }
 
 
-    public static JsonObject sendRequest(String id) {
+    public JsonObject sendRequest(String id) {
         HttpClient client = HttpClient.newHttpClient();
         URI url2 = URI.create("https://api.football-data.org/v4/matches/" + id);
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(url2)
-                .header("X-Auth-Token", "d90bee97e5b74ddbb061c11ba50e32b2")
+                .header("X-Auth-Token", token)
                 .GET()
                 .build();
 
