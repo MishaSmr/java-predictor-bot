@@ -551,6 +551,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                                     " автоматически внесен счет " + m.getScores1() + "-" + m.getScores2();
                             sendMessage(botConfig.getAdminOneId(), text);
                             sendMessage(botConfig.getAdminTwoId(), text);
+                            sendResults(m);
                             ignoreIndex.add(i);
                             if (ignoreIndex.size() == todayMatchesApiIds.size()) {
                                 flag = false;
@@ -567,6 +568,31 @@ public class TelegramBot extends TelegramLongPollingBot {
             });
             thread.start();
         }
+    }
+
+    private void sendResults(Match m) {
+        Thread thread = new Thread(() -> {
+            List<Prediction> matchPredictions = predictionRepository.findByMatch(m.getMatchId());
+            for (Prediction p : matchPredictions) {
+                StringBuilder sb = new StringBuilder();
+                int points = p.getPoints();
+                sb.append(EmojiParser.parseToUnicode("✅"))
+                        .append(" В матче ")
+                        .append(makeShortTextFromMatch(m))
+                        .append(" основное время закончено со счетом ")
+                        .append(m.getScores1() + "-" + m.getScores2())
+                        .append("\nВаши очки за прогноз: " + "<b>" + points + "</b>");
+                if (points == 10) sb.append(". Точное попадание!");
+                sendMessage(p.getUser().getChatId(), sb.toString());
+                try {
+                    Thread.sleep(1200L);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+        thread.start();
     }
 
     private String makeTextFromMatch(Match match) {

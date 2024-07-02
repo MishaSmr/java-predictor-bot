@@ -14,7 +14,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -42,7 +41,9 @@ public class ApiService {
                 int homeScore = jsonObjectScore.getAsJsonObject("fullTime").get("home").getAsInt();
                 int awayScore = jsonObjectScore.getAsJsonObject("fullTime").get("away").getAsInt();
                 return new Integer[]{homeScore, awayScore};
-            } else if (status.equals("FINISHED") || status.equals("EXTRA_TIME") || status.equals("PENALTY_SHOOTOUT")) {
+            } else if (status.equals("FINISHED") || status.equals("EXTRA_TIME") || status.equals("PENALTY_SHOOTOUT") ||
+                    (status.equals("IN_PLAY") && duration.equals("EXTRA_TIME")) ||
+                    (status.equals("IN_PLAY") && duration.equals("PENALTY_SHOOTOUT"))) {
                 int homeScore = jsonObjectScore.getAsJsonObject("regularTime").get("home").getAsInt();
                 int awayScore = jsonObjectScore.getAsJsonObject("regularTime").get("away").getAsInt();
                 return new Integer[]{homeScore, awayScore};
